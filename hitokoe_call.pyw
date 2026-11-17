@@ -500,8 +500,12 @@ class App:
 
         bottom = tk.Frame(self.root, bg=P["bg"])
         bottom.pack(side="bottom", fill="x", padx=px(14), pady=(px(6), px(12)))
-        self.me = tk.Label(bottom, text="", font=self.f_small, fg=P["muted"], bg=P["bg"])
+        self.me = tk.Label(bottom, text="", font=self.f_small, fg=P["muted"], bg=P["bg"], cursor="hand2")
         self.me.pack(side="left")
+        self.me.bind("<Button-1>", lambda e: self.copy_my_ip())
+        tk.Button(bottom, text="IPをコピー", font=self.f_small, bg=P["head_bg"], fg=P["text"], relief="flat",
+                  activebackground=P["hover"], activeforeground=P["text"], padx=px(6), cursor="hand2",
+                  command=self.copy_my_ip).pack(side="left", padx=(px(6), 0))
         tk.Button(bottom, text="📞 通話する", font=self.f_bold, bg=GREEN, fg="white", relief="flat",
                   activebackground="#236240", activeforeground="white", padx=px(14), pady=px(4),
                   cursor="hand2", command=self.call_selected).pack(side="right")
@@ -522,6 +526,9 @@ class App:
         tsb.pack(side="right", fill="y")
         self.tree.pack(fill="both", expand=True)
         self.tree.bind("<Double-1>", lambda e: self.call_selected())
+        self.tree.bind("<Button-3>", self._peer_menu)
+        self.tree.bind("<Control-c>", lambda e: self.copy_peer_ip())
+        self.tree.bind("<Control-C>", lambda e: self.copy_peer_ip())
 
     def _style_list(self):
         style = ttk.Style()
@@ -698,10 +705,69 @@ class App:
         except OSError:
             messagebox.showwarning(TITLE, "IP アドレスの形が正しくありません。", parent=self.root)
 
-    def show_ip(self):
+    # ---------------------------------------------------- IP アドレスのコピー
+
+    def copy(self, text: str, what: str):
+        self.root.clipboard_clear()
+        self.root.clipboard_append(text)
+        self.root.update()  # ウィンドウを閉じてもクリップボードに残るように
+        self.status.configure(text=f"{what} をコピーしました: {text}")
+
+    def copy_my_ip(self):
         ips = lan.local_ipv4s()
-        messagebox.showinfo(TITLE, "このパソコンの IP アドレス:\n" + ("\n".join(ips) if ips else "わかりませんでした"),
-                            parent=self.root)
+        if ips:
+            self.copy(ips[0], "自分の IP アドレス")
+        else:
+            self.status.configure(text="IP アドレスがわかりませんでした")
+
+    def copy_peer_ip(self):
+        sel = self.tree.selection()
+        p = next((p for p in self.peers if sel and p["id"] == sel[0]), None)
+        if p:
+            self.copy(p["ip"], f"{p['name']} さんの IP アドレス")
+
+    def _peer_menu(self, e):
+        row = self.tree.identify_row(e.y)
+        if not row:
+            return
+        self.tree.selection_set(row)
+        m = tk.Menu(self.root, tearoff=False)
+        m.add_command(label="📞 通話する", command=self.call_selected)
+        m.add_command(label="IP アドレスをコピー", command=self.copy_peer_ip)
+        try:
+            m.tk_popup(e.x_root, e.y_root)
+        finally:
+            m.grab_release()
+
+    def show_ip(self):
+        """自分の IP アドレスを、選んだりコピーしたりできる形で見せる。"""
+        ips = lan.local_ipv4s()
+        px = self.px
+        w = tk.Toplevel(self.root)
+        w.title("自分の IP アドレス")
+        w.configure(bg=P["bg"])
+        w.resizable(False, False)
+        w.transient(self.root)
+        tk.Label(w, text="このパソコンの IP アドレス", font=self.f_bold, fg=P["text"], bg=P["bg"]).pack(
+            anchor="w", padx=px(16), pady=(px(14), px(6)))
+        if not ips:
+            tk.Label(w, text="わかりませんでした", font=self.f_body, fg=P["muted"], bg=P["bg"]).pack(padx=px(16))
+        for ip in ips:
+            row = tk.Frame(w, bg=P["bg"])
+            row.pack(fill="x", padx=px(16), pady=px(3))
+            v = tk.StringVar(value=ip)
+            ent = tk.Entry(row, textvariable=v, state="readonly", font=self.f_input, width=16, relief="flat",
+                           readonlybackground=P["list_bg"], fg=P["text"], highlightthickness=1,
+                           highlightbackground=P["ring_idle"])
+            ent.pack(side="left", ipady=px(3))
+            tk.Button(row, text="コピー", font=self.f_small, bg=GREEN, fg="white", relief="flat",
+                      activebackground="#236240", activeforeground="white", padx=px(10), cursor="hand2",
+                      command=lambda i=ip: (self.copy(i, "自分の IP アドレス"), w.destroy())).pack(
+                side="left", padx=(px(8), 0), fill="y")
+        tk.Label(w, text="相手に伝えて「設定 → IP アドレスで相手を追加…」に貼り付けてもらいます",
+                 font=self.f_small, fg=P["muted"], bg=P["bg"]).pack(anchor="w", padx=px(16), pady=(px(8), px(14)))
+        set_titlebar(w, P["dark"])
+        w.focus_force()
 
     def on_close(self):
         ans = messagebox.askyesnocancel(

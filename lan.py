@@ -28,14 +28,17 @@ def local_ipv4s() -> list[str]:
                 ips.add(ip)
     except OSError:
         pass
+    primary = None
     try:  # 外向きに使うアドレス(UDP の connect は実際には何も送らない)
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         s.connect(("10.255.255.255", 1))
-        ips.add(s.getsockname()[0])
+        primary = s.getsockname()[0]
         s.close()
     except OSError:
         pass
-    return sorted(ips)
+    # ふだん使うアドレスを先頭に(仮想マシン用などのアドレスは後ろへ)
+    rest = sorted(ips - {primary})
+    return ([primary] if primary and not primary.startswith("127.") else []) + rest
 
 
 class Call:
