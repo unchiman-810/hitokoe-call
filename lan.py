@@ -2,7 +2,7 @@
 
 ・相手さがし: UDP ブロードキャストで「ここにいるよ」を数秒ごとに知らせ合う
 ・通話: かける側が相手の TCP ポートにつなぎ、1行1つの JSON をやりとりし続ける
-    invite → accept / decline / busy → text(入力中の文字) / line(確定) / react / bye
+    invite → accept / decline / busy → text(入力中の文字) / bye
 サーバーは使わない。インターネットにも出ない(同じ LAN の中だけ)。
 """
 from __future__ import annotations

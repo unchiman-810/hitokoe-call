@@ -1,7 +1,7 @@
 """ひとこえ通話 ― 同じネットワークでできる「テキスト通話」
 
 相手に通話をかけて、つながったらお互いが打っている文字がリアルタイムで見える。
-Enter で消して次の言葉へ。リアクションも送れる。履歴は残さない(画面にも、ファイルにも)。
+Enter で消して次の言葉へ。履歴は残さない(画面にも、ファイルにも)。
 """
 from __future__ import annotations
 
@@ -25,7 +25,6 @@ RING_TIMEOUT = 30  # 秒
 
 GREEN = "#2E7D4F"
 RED = "#D9443B"
-REACTIONS = ["👍", "❤️", "🎉", "😂", "😮"]
 
 
 def dpi_scale() -> float:
@@ -202,18 +201,9 @@ class CallWindow(tk.Toplevel):
                               command=self.hang_up)
         self.hang.pack(side="right")
 
-        # 下: リアクションとヒント
+        # 下: ヒント
         tk.Label(self, text="打った文字は相手に見えます ・ Enter で消す",
-                 font=app.f_small, fg=P["hint"], bg=P["bg"]).pack(side="bottom", pady=(0, px(6)))
-        rx = tk.Frame(self, bg=P["bg"])
-        rx.pack(side="bottom", pady=(px(2), 0))
-        self.rx_buttons = []
-        for emo in REACTIONS:
-            b = tk.Button(rx, text=emo, font=app.f_emoji, relief="flat", bg=P["bg"], fg=P["text"],
-                          activebackground=P["hover"], activeforeground=P["text"], disabledforeground=P["disabled"],
-                          cursor="hand2", state="disabled", command=lambda e=emo: self.react(e))
-            b.pack(side="left", padx=px(1))
-            self.rx_buttons.append(b)
+                 font=app.f_small, fg=P["hint"], bg=P["bg"]).pack(side="bottom", pady=(px(4), px(6)))
 
         # 2枚のカード(上: 相手 / 下: 自分)。どちらもツルの一声の吹き出しくらいの大きさ
         lh = app.f_input.metrics("linespace")
@@ -279,24 +269,6 @@ class CallWindow(tk.Toplevel):
             self.state_lbl.configure(text=f"通話中  {s // 60:02d}:{s % 60:02d}", fg=P["ring"])
         self.after(300, self._tick)
 
-    def float_reaction(self, emo: str, mine: bool):
-        """リアクションをカードの上にふわっと出す。"""
-        cv = self.them  # カードが小さいので、どちらのリアクションも相手のカードの上に出す
-        w, h = cv.winfo_width(), cv.winfo_height()
-        xr = 0.86 if mine else 0.5
-        item = cv.create_text(w * xr, h * 0.85, text=emo, font=self.app.f_react, fill=P["text"])
-        steps = 14
-
-        def step(i=0):
-            if not cv.winfo_exists():
-                return
-            if i > steps:
-                cv.delete(item)
-                return
-            cv.coords(item, w * xr, h * (0.85 - 0.6 * i / steps))
-            self.after(60, step, i + 1)
-        step()
-
     # ---------------------------------------------------- 状態
 
     def attach(self, call: lan.Call):
@@ -307,8 +279,6 @@ class CallWindow(tk.Toplevel):
         self.notice = ""
         self._show_them()
         self.mine.configure(state="normal")
-        for b in self.rx_buttons:
-            b.configure(state="normal")
         self.lift()
         self.mine.focus_force()
 
@@ -326,8 +296,6 @@ class CallWindow(tk.Toplevel):
         self.mine.configure(state="normal")
         self.mine.delete("1.0", "end")
         self.mine.configure(state="disabled")
-        for b in self.rx_buttons:
-            b.configure(state="disabled")
         self.hang.configure(text="閉じる", bg=P["closed_btn"], command=self.close)
         self.state_lbl.configure(text="終了", fg=P["muted"])
 
@@ -354,11 +322,6 @@ class CallWindow(tk.Toplevel):
         if not self.ended:
             self.mine.delete("1.0", "end")
 
-    def react(self, emo: str):
-        if self.call and not self.ended:
-            self.call.send("react", v=emo)
-            self.float_reaction(emo, mine=True)
-
     def on_message(self, msg: dict):
         t = msg.get("t")
         v = msg.get("v") if isinstance(msg.get("v"), str) else ""
@@ -368,8 +331,6 @@ class CallWindow(tk.Toplevel):
             self.partner_live = v
             self.partner_seen = time.time()
             self._show_them()
-        elif t == "react" and v in REACTIONS:
-            self.float_reaction(v, mine=False)
         elif t == "decline":
             self.end("応答がありませんでした")
         elif t == "busy":
@@ -448,9 +409,6 @@ class App:
         self.f_live = tkfont.Font(family="Yu Gothic UI", size=15)
         self.f_card = tkfont.Font(family="Yu Gothic UI", size=17)
         self.f_name = tkfont.Font(family="Yu Gothic UI", size=10, weight="bold")
-        self.f_emoji = tkfont.Font(family="Segoe UI Emoji", size=15)
-        self.f_huge = tkfont.Font(family="Segoe UI Emoji", size=40)
-        self.f_react = tkfont.Font(family="Segoe UI Emoji", size=22)
         style = ttk.Style()
         style.theme_use("clam")  # 一覧の色を白/黒に変えられるテーマ
         style.configure("Treeview", rowheight=self.px(30), font=self.f_body, borderwidth=0)
@@ -510,7 +468,7 @@ class App:
         tk.Button(bottom, text="IPをコピー", font=self.f_small, bg=P["head_bg"], fg=P["text"], relief="flat",
                   activebackground=P["hover"], activeforeground=P["text"], padx=px(6), cursor="hand2",
                   command=self.copy_my_ip).pack(side="left", padx=(px(6), 0))
-        tk.Button(bottom, text="📞 通話する", font=self.f_bold, bg=GREEN, fg="white", relief="flat",
+        tk.Button(bottom, text="通話する", font=self.f_bold, bg=GREEN, fg="white", relief="flat",
                   activebackground="#236240", activeforeground="white", padx=px(14), pady=px(4),
                   cursor="hand2", command=self.call_selected).pack(side="right")
 
@@ -736,7 +694,7 @@ class App:
             return
         self.tree.selection_set(row)
         m = tk.Menu(self.root, tearoff=False)
-        m.add_command(label="📞 通話する", command=self.call_selected)
+        m.add_command(label="通話する", command=self.call_selected)
         m.add_command(label="IP アドレスをコピー", command=self.copy_peer_ip)
         try:
             m.tk_popup(e.x_root, e.y_root)
