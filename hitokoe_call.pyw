@@ -189,13 +189,12 @@ class CallWindow(tk.Toplevel):
 
         self.title(f"{TITLE} - {peer_name}")
         self.configure(bg=P["bg"])
-        self.geometry(f"{px(420)}x{px(600)}")
-        self.minsize(px(320), px(460))
+        self.minsize(px(260), px(220))  # 吹き出しくらいの小さな画面(広げることもできる)
         self.protocol("WM_DELETE_WINDOW", self.close)
 
         # 上の帯: 通話時間と「切る」
         bar = tk.Frame(self, bg=P["bg"])
-        bar.pack(side="top", fill="x", padx=px(14), pady=(px(10), px(4)))
+        bar.pack(side="top", fill="x", padx=px(10), pady=(px(8), px(2)))
         self.state_lbl = tk.Label(bar, text="呼び出し中…" if outgoing else "", font=app.f_small, fg=P["muted"], bg=P["bg"])
         self.state_lbl.pack(side="left")
         self.hang = tk.Button(bar, text="切る", font=app.f_small, bg=RED, fg="white", relief="flat",
@@ -204,40 +203,43 @@ class CallWindow(tk.Toplevel):
         self.hang.pack(side="right")
 
         # 下: リアクションとヒント
-        tk.Label(self, text="打っている文字はそのまま相手に見えます ・ Enter で消して次へ",
-                 font=app.f_small, fg=P["hint"], bg=P["bg"]).pack(side="bottom", pady=(0, px(8)))
+        tk.Label(self, text="打った文字は相手に見えます ・ Enter で消す",
+                 font=app.f_small, fg=P["hint"], bg=P["bg"]).pack(side="bottom", pady=(0, px(6)))
         rx = tk.Frame(self, bg=P["bg"])
-        rx.pack(side="bottom", pady=(px(6), px(2)))
+        rx.pack(side="bottom", pady=(px(2), 0))
         self.rx_buttons = []
         for emo in REACTIONS:
             b = tk.Button(rx, text=emo, font=app.f_emoji, relief="flat", bg=P["bg"], fg=P["text"],
                           activebackground=P["hover"], activeforeground=P["text"], disabledforeground=P["disabled"],
                           cursor="hand2", state="disabled", command=lambda e=emo: self.react(e))
-            b.pack(side="left", padx=px(3))
+            b.pack(side="left", padx=px(1))
             self.rx_buttons.append(b)
 
-        # 2枚のカード(上: 相手 / 下: 自分)
+        # 2枚のカード(上: 相手 / 下: 自分)。どちらもツルの一声の吹き出しくらいの大きさ
+        lh = app.f_input.metrics("linespace")
         cards = tk.Frame(self, bg=P["bg"])
-        cards.pack(side="top", fill="both", expand=True, padx=px(14))
-        cards.rowconfigure(1, weight=1, uniform="c")
-        cards.rowconfigure(2, weight=1, uniform="c")
+        cards.pack(side="top", fill="both", expand=True, padx=px(10))
+        cards.rowconfigure(1, weight=1)  # 画面を広げたときは相手のカードが広がる
+        cards.rowconfigure(2, weight=0)
         cards.columnconfigure(0, weight=1)
         tk.Label(cards, text=peer_name, font=app.f_name, fg=P["text"], bg=P["bg"]).grid(row=0, column=0, sticky="w",
-                                                                                  pady=(px(2), px(4)))
+                                                                                  pady=(0, px(3)))
         self.them = Card(cards, P["card_them"], self._layout_them)
+        self.them.configure(width=px(300), height=lh * 3 + px(30))
         self.them.grid(row=1, column=0, sticky="nsew")
         self.me_card = Card(cards, P["card_me"], self._layout_me)
-        self.me_card.grid(row=2, column=0, sticky="nsew", pady=(px(16), 0))
+        self.me_card.configure(width=px(300), height=lh * 2 + px(24))
+        self.me_card.grid(row=2, column=0, sticky="nsew", pady=(px(8), 0))
 
-        r = px(20)
-        cx = cy = px(12) + r
-        self.ring = self.them.create_oval(cx - r - 3, cy - r - 3, cx + r + 3, cy + r + 3, outline=P["ring_idle"], width=3)
+        r = px(11)
+        cx = cy = px(8) + r
+        self.ring = self.them.create_oval(cx - r - 2, cy - r - 2, cx + r + 2, cy + r + 2, outline=P["ring_idle"], width=2)
         self.them.create_oval(cx - r + 1, cy - r + 1, cx + r - 1, cy + r - 1, fill=avatar_color(peer_name), outline="")
-        self.them.create_text(cx, cy, text=peer_name[:1], fill="white", font=app.f_bold)
-        self.them_text = self.them.create_text(0, 0, text=self.notice, fill=P["muted"], font=app.f_card,
+        self.them.create_text(cx, cy, text=peer_name[:1], fill="white", font=app.f_small)
+        self.them_text = self.them.create_text(0, 0, text=self.notice, fill=P["muted"], font=app.f_input,
                                                justify="center")
 
-        self.mine = tk.Text(self.me_card, height=3, wrap="char", font=app.f_card, bg=P["card_me"], fg=P["text"],
+        self.mine = tk.Text(self.me_card, height=2, wrap="char", font=app.f_input, bg=P["card_me"], fg=P["text"],
                             relief="flat", bd=0, highlightthickness=0, insertbackground=P["text"],
                             insertwidth=px(2), state="disabled", spacing1=px(2))
         self.mine.tag_configure("c", justify="center")
@@ -252,13 +254,13 @@ class CallWindow(tk.Toplevel):
 
     def _layout_them(self, w, h):
         self.them.coords(self.them_text, w / 2, h / 2)
-        self.them.itemconfigure(self.them_text, width=max(50, w - self.app.px(60)))
+        self.them.itemconfigure(self.them_text, width=max(50, w - self.app.px(64)))
 
     def _layout_me(self, w, h):
-        lh = self.app.f_card.metrics("linespace") + self.app.px(2)
+        lh = self.app.f_input.metrics("linespace") + self.app.px(2)
         self.me_card.coords(self.mine_win, w / 2, h / 2)
-        self.me_card.itemconfigure(self.mine_win, width=max(50, w - self.app.px(48)),
-                                   height=min(h - self.app.px(24), lh * 3 + self.app.px(6)))
+        self.me_card.itemconfigure(self.mine_win, width=max(50, w - self.app.px(32)),
+                                   height=max(lh, min(h - self.app.px(12), lh * 2 + self.app.px(4))))
 
     def _show_them(self):
         if self.partner_live:
@@ -279,9 +281,10 @@ class CallWindow(tk.Toplevel):
 
     def float_reaction(self, emo: str, mine: bool):
         """リアクションをカードの上にふわっと出す。"""
-        cv = self.me_card if mine else self.them
+        cv = self.them  # カードが小さいので、どちらのリアクションも相手のカードの上に出す
         w, h = cv.winfo_width(), cv.winfo_height()
-        item = cv.create_text(w * 0.82, h * 0.85, text=emo, font=self.app.f_huge, fill=P["text"])
+        xr = 0.86 if mine else 0.5
+        item = cv.create_text(w * xr, h * 0.85, text=emo, font=self.app.f_react, fill=P["text"])
         steps = 14
 
         def step(i=0):
@@ -290,7 +293,7 @@ class CallWindow(tk.Toplevel):
             if i > steps:
                 cv.delete(item)
                 return
-            cv.coords(item, w * 0.82, h * (0.85 - 0.6 * i / steps))
+            cv.coords(item, w * xr, h * (0.85 - 0.6 * i / steps))
             self.after(60, step, i + 1)
         step()
 
@@ -447,6 +450,7 @@ class App:
         self.f_name = tkfont.Font(family="Yu Gothic UI", size=10, weight="bold")
         self.f_emoji = tkfont.Font(family="Segoe UI Emoji", size=15)
         self.f_huge = tkfont.Font(family="Segoe UI Emoji", size=40)
+        self.f_react = tkfont.Font(family="Segoe UI Emoji", size=22)
         style = ttk.Style()
         style.theme_use("clam")  # 一覧の色を白/黒に変えられるテーマ
         style.configure("Treeview", rowheight=self.px(30), font=self.f_body, borderwidth=0)
